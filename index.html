@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Binance Referral Analyzer</title>
+    <!-- https://electronjs.org/docs/tutorial/security#csp-meta-tag -->
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="./bulma.min.css">
+    
+  </head>
+  <body>
+    <!-- <h1>Hello World!</h1>
+    We are using node <script>document.write(process.versions.node)</script>,
+    Chrome <script>document.write(process.versions.chrome)</script>,
+    and Electron <script>document.write(process.versions.electron)</script>. -->
+
+    <div id="update-modal" class="modal">
+      <div class="modal-background"></div>
+      <div class="modal-card">
+        <header class="modal-card-head">
+          <p class="modal-card-title" id="update-modal-title">New version available!</p>
+          <!-- <button class="delete" aria-label="close"></button> -->
+        </header>
+        <section class="modal-card-body" id="update-modal-body">
+          Exciting!  Sorry to put this nag screen here, but please head over to download the new version before continuing.
+        </section>
+        <footer class="modal-card-foot">
+          <!-- <button class="button is-success">Save changes</button>
+          <button class="button">Cancel</button> -->
+        </footer>
+      </div>
+    </div>
+
+    <section class='section'>
+        <!-- <h1 class='title'>Howdy!</h1> -->
+        <p class='subtitle'>Welcome to the Binance referral income analyzer.</p>
+
+        <div class="box">
+          <h1 class='title is-4'>A quick note on tax calculations</h1>
+          <div class="content">
+
+            <p>
+              This app will sum all of your commissions together and output them in a CSV spreadsheet file that shows how much of each cryptocurrency 
+              you earned in each time interval (i.e. each day, week or year).
+            </p>
+
+            <p>I've designed the tool to format that output CSV file so that it can be easily imported 
+              at <a onClick="linkClick(this)" out_link="https://cointracking.info?ref=R317011">CoinTracking.info</a> through 
+              their <a  onClick="linkClick(this)" out_link="https://cointracking.info/import/import_csv?ref=R317011">Bulk CSV Import</a> tool. 
+              You can use CoinTracking.info for tracking capital gains when you sell the coins you've earned, and for income tax computation.
+            </p>
+
+            <p>
+              I use CoinTracking.info myself, and recommend it for others.  If you choose to use CoinTracking.info, 
+              and if you appreciate this tool, I would be grateful if you would 
+              use <a onClick="linkClick(this)" out_link="https://cointracking.info?ref=R317011">my referral link</a> to sign up for it.  
+              You'll get a 10% discount, and I'll get a small kickback.
+            </p>
+
+            <p>Thanks, and happy trading 🙂</p>
+
+          </div>
+        </div>
+
+        <div class='box'>
+
+            <h1 class='title is-4'>Step 1.</h2>
+            <p class='subtitle'>Load CSV files</p>
+            <div class='content'>
+                <p>Export CSV files from Binance for all of your referral income for the tax year. Then drag and drop the CSV files into the box below.</p>
+
+                <p>You can export these files from Binance <a onClick="linkClick(this)" out_link="https://www.binance.com/en/activity/referral">here</a> by clicking the "Export" link under "Commission History".</p>
+
+                <p>Unfortunately you can only export 30 days of data at a time, and Binance will only produce one commission export for you every 24 hours (if you try to export again within 24hrs, it will just give you the same file again), so it might take you a while to export all the data you need.</p>
+            </div>
+
+            <div class="notification is-primary" id="drag-file">
+                Drag your files here
+            </div>
+
+            
+            <div class='content'>
+                <p><strong>Files loaded: </strong><span id="num-of-files-span">0</span></p>
+            </div>
+
+            <table class='table' id="file-table" hidden>
+                <thead>
+                    <tr>
+                        <th>File Path</th>
+                        <th>File Size</th>
+                    </tr>
+                </thead>
+                <tbody>
+                </tbody>
+            </table>
+        </div>
+
+
+        <div class='box'>
+            <h1 class='title is-4'>Step 2.</h2>
+            <p class='subtitle'>Choose your interval</p>
+            <div class='content'>
+                <p>This tool will consolidate referral income entries within the interval below.  For example, if you choose an interval of 7 days, this tool will add up all the income entries of each currency for every 7 day period, and spit out a CSV file with just those consolidated income entries.</p>
+            </div>
+
+            <div class="field">
+                <label class="label">Consolidation Interval (days)</label>
+                <div class="control">
+                  <input class="input" type="text" placeholder="I recommend 1" value="1" id="interval-input">
+                </div>
+            </div>
+        </div> 
+
+        <div class='box'>
+            <h1 class='title is-4'>Step 3.</h2>
+            <p class='subtitle'>Choose where to save the output CSV</p>
+            <div class='content'>
+                <!-- <p>Choose where this tool will save the output CSV file with the consolidated income infor</p> -->
+            </div>
+
+            <button class="button is-link" id="save-as-button">Save As</button>
+
+            <div class='content'>
+                <br>
+                <p id="output-path-paragraph">Test</p>
+            </div>
+
+        </div> 
+
+
+        <div class='box'>
+            <h1 class='title is-4'>(OPTIONAL) Step 4.</h2>
+            <p class='subtitle'>Filter by date</p>
+            <div class='content'>
+                <p>Please enter dates in the format: 2019-03-17 13:49:43</p>
+                <p>Income earned on the end date will not be included.</p>
+            </div>
+
+            <div class="field">
+
+                <div class="control">
+                  <input class="input is-small" type="text" placeholder="Start date" id="start-date">
+                </div>
+
+                <div class="control">
+                  <input class="input is-small" type="text" placeholder="End date" id="end-date">
+                </div>
+
+            </div>
+
+        </div> 
+
+        <div class='box'>
+            <h1 class='title is-4'>(OPTIONAL) Step 5.</h2>
+            <p class='subtitle'>Include/Exclude Specific Emails</p>
+            <div class='content'>
+                <p>If you want, you can enter specific referral email addresses below. You can choose to have this tool output a CSV that includes only these referals, or a CSV that includes everyone except these referrals.  Separate emails with commas.</p>
+            </div>
+
+            <div class="control">
+                <!-- <label class='label'>TEst</label> -->
+                <label class="radio">
+                  <input type="radio" name="email-filter-radio" id="exclude-radio" checked>
+                  Exclude income from these addresses
+                </label>
+                <label class="radio">
+                  <input type="radio" name="email-filter-radio"id="include-radio" >
+                  Include income from these addresses only
+                </label>
+            </div>
+
+            <br/>
+
+            <div class="field">
+                <label class="label">Emails to include/exclude</label>
+                <div class="control">
+                  <textarea class="textarea" id="specific-referrals-textarea" placeholder="sa**********ry@gmail.com, ky***********at@gmail.com"></textarea>
+                </div>
+              </div>
+        </div> 
+
+        <div class='box'>
+            <h1 class='title is-4'>(OPTIONAL) Step 6.</h2>
+            <p class='subtitle'>Include/Exclude Specific Coins</p>
+            <div class='content'>
+                <p>If you want, you can enter specific coins below. You can choose to have this tool output a CSV that includes only these coins, 
+                  or a CSV that includes everything except these coins.  Separate coins with commas.</p>
+                <p>This can be useful if you prefer to exclude the small-amount coins that you are disposing of through dust conversion.</p>
+            </div>
+
+            <div class="control">
+                <!-- <label class='label'>TEst</label> -->
+                <label class="radio">
+                  <input type="radio" name="coin-filter-radio" id="coin-exclude-radio" checked>
+                  Exclude income from these coins
+                </label>
+                <label class="radio">
+                  <input type="radio" name="coin-filter-radio"id="coin-include-radio" >
+                  Include income from these coins only
+                </label>
+            </div>
+
+            <br/>
+
+            <div class="field">
+                <label class="label">Coins to include/exclude</label>
+                <div class="control">
+                  <textarea class="textarea" id="specific-coins-textarea" placeholder="BNB, BTC"></textarea>
+                </div>
+              </div>
+        </div> 
+
+        <!-- <div class='box'>
+            <h1 class='title is-4'>(OPTIONAL) Step 7.</h2>
+            <p class='subtitle'>Change Coin Acronyms</p>
+            <div class='content'>
+                <p>For some coins, Binance uses a different acronym than other platforms.  For example, Binance refers BitTorent coin with the acronym BTT, while CoinTracking.info refers to it as BTT2 (and uses the BTT acronym for a different coin called "Blocktrade Token").</p>
+                <p>By default, I've filled in some acronym changes below that I know to be necessary for importing to CoinTracking.info.  However, there may be more that aren't included here.</p>
+            </div>
+
+            <br/>
+
+            <div class="field">
+                <label class="label">Acronyms to change:</label>
+                <div class="control">
+                  <textarea class="textarea" id="acronym-changes-textarea" value="BTT to BTT2, YOYO to YOYOW, BQX to ETHOS, CMT to CMT2, ONG to ONG2"></textarea>
+                </div>
+              </div>
+        </div>  -->
+
+        
+        <!-- <div class='box'>
+          <h1 class='title is-4'>(OPTIONAL) Step 7.</h2>
+          <p class='subtitle'>Break down by coin?</p>
+          <div class='content'>
+              <p>Do you want to see how much you earned in each interval, broken down by coin?  Or do you just want to see the value of your total income for each consolidated interval in BTC/BNB/USD?  If you are using this for import to Cointracking.info or another tax tracking app, make sure to choose yes here.</p>
+
+              <p><strong>Break down by coin?</strong></p>
+          </div>
+
+          <div class="control">
+              <label class="radio">
+                <input type="radio" name="breakdown-by-coin-radio" id="do-breakdown-radio" checked>
+                Yes
+              </label>
+              <label class="radio">
+                <input type="radio" name="breakdown-by-coin-radio"id="no-breakdown-radio" >
+                No
+              </label>
+          </div>
+      </div>  -->
+
+        <div class='box'>
+            <h1 class='title is-4'>(OPTIONAL) Step 7.</h2>
+            <p class='subtitle'>Export with contemporary prices? (BETA)</p>
+            <div class='content'>
+
+              <!-- <p>
+                By default, this app will sum all of your commissions together and output them in a CSV spreadsheet file that shows how much of each cryptocurrency 
+                you earned in each time interval.
+              </p>
+
+              <p>I've designed the tool to format that CSV so that it can be easily imported 
+                at <a onClick="linkClick(this)" out_link="https://cointracking.info?ref=R317011">CoinTracking.info</a> through 
+                their <a  onClick="linkClick(this)" out_link="https://cointracking.info/import/import_csv?ref=R317011">Bulk CSV Import</a> tool. 
+                You can use CoinTracking.info for tracking capital gains when you sell the coins you've earned, and for income tax computation.
+              </p>
+
+              <p>
+                I use CoinTracking.info myself, and recommend it for others.  If you choose to use CoinTracking.info, 
+                and if you appreciate this tool, I would be grateful if you would 
+                use <a onClick="linkClick(this)" out_link="https://cointracking.info?ref=R317011">my referral link</a> to sign up for it.  
+                You'll get a 10% discount, and I'll get a small kickback.
+              </p> -->
+
+                <!-- <p>If you want, this tool will calculate the "contemporary" value for each consolidated item of referral income.  It will provide the total value in BTC, USDT, and BNB at the time that the (consolidated) referral income was earned.  This will take a little extra time, because the data is pulled from Binance's API.</p> -->
+                <p>This app can attempt to determine the contemporary value of each income event. </p>
+
+                <p>
+                  For example, if you earned 0.25 ETH on December 8, 2018, it will calculate in the spreadsheet what that 0.25 ETH was worth in Bitcoin, in USDT, and in BNB on December 8, 2018.  
+                  This historic price data is pulled from Binance's API.</p>
+
+                <p>Beware - this is a beta feature, and has some accuracy issues.  Also, it can take a very long time.</p>
+
+                <p>Also, if you turn this on, the CSV will be formatted in a way that is <strong>not compatible for import to <a onClick="linkClick(this)" out_link="https://cointracking.info?ref=R317011">CoinTracking.info</a></strong> for tax reporting.</p>
+
+                <p>Here's an example of what the output looks like without contemporary prices (ready for import at CoinTracking.info): <a onClick="linkClick(this)" out_link="https://1drv.ms/x/s!AulxQQJVHqAIcNWauymQMuTMsW4?e=hyntAF">Example Output - Standard</a></p>
+
+                <p>And here's what it looks like with the contemporary prices included: <a onClick="linkClick(this)" out_link="https://1drv.ms/x/s!AulxQQJVHqAIbp-AUrS_iIcRbNk?e=vqFEys">Example Output - With Prices</a></p>
+
+                <p><strong>Include contemporary prices?</strong></p>
+            </div>
+
+            <div class="control">
+                <!-- <label class='label'>TEst</label> -->
+                <label class="radio">
+                  <input type="radio" name="cointracking-import-radio"id="no-import-radio">
+                  Yes
+                </label>
+                <label class="radio">
+                  <input type="radio" name="cointracking-import-radio" id="do-import-radio" checked>
+                  No
+                </label>
+            </div>
+        </div> 
+
+        <div class='box'>
+          <h1 class='title is-4'>Heads up...</h2>
+          <p class='subtitle'>Change Coin Acronyms</p>
+          <div class='content'>
+              <p>This is something important to note if you will be importing this data into CoinTracking.info, or any other crypto tax platform.</p> 
+
+              <p>For some coins, Binance uses a different acronym than other platforms.  
+                For example, Binance refers to BitTorent coin with the acronym BTT, 
+                while CoinTracking.info refers to it as BTT2 (and uses the BTT acronym for a different coin called "Blocktrade Token").
+              </p>
+
+              <p>
+                Before importing into CounTracking.info, I recommend using find/replace to make the following changes in the output file (though there may be more):
+              </p>
+              
+              <!-- <p>Before importing the income data into any other platform, make sure to manually do a find/replace on the CSV export from this tool to "fix" any acronyms to match the needs of the import platform.</p>
+              
+              <p>If you are importing to CoinTracking.info, here are some acronym changes that I know to be necessary for importing there (though there might be more):</p> -->
+              <ul>
+                <li>Change 'BTT' to 'BTT2'</li>
+                <li>Change 'YOYO' to 'YOYOW'</li>
+                <li>Change 'BQX' to 'ETHOS'</li>
+                <li>Change 'CMT' to 'CMT2'</li>
+                <li>Change 'ONG' to 'ONG2'</li>
+              </ul>
+          </div>
+
+          <!-- <br/>
+
+          <div class="field">
+              <label class="label">Acronyms to change:</label>
+              <div class="control">
+                <textarea class="textarea" id="acronym-changes-textarea" value="BTT to BTT2, YOYO to YOYOW, BQX to ETHOS, CMT to CMT2, ONG to ONG2"></textarea>
+              </div>
+            </div> -->
+      </div> 
+
+        <div class='box'>
+            <h1 class='title is-4'>Step 8.</h2>
+            <p class='subtitle'>Click the green button!</p>
+  
+            <button class="button is-success" id="go-btn">Go!</button>
+
+            <div id="progress-bar" hidden>
+                <br>
+                <br>
+                <progress class="progress is-large is-info" max="100">60%</progress>
+            </div>
+            <!-- <div id="status-message" hidden>Working...</div> -->
+
+
+            <div class="content">
+                <ul id="status-messages">
+                </ul>
+            </div>
+
+            <div id="progress-bar-adjustable-div" hidden>
+                <progress id="progress-bar-adjustable" class="progress is-large is-info" max="100" value="0">60%</progress>
+            </div>
+            
+            <p id="visible-progress-number"></p>
+        </div> 
+
+    </section>
+
+
+
+    <script src="dragFiles.js"></script>
+
+
+
+
+  </body>
+</html>

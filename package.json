@@ -1,0 +1,26 @@
+{
+  "name": "binance-referral-analyzer-electron",
+  "productName": "Binance Referral Analyzer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "electron .",
+    "build-win64": "electron-packager ./ --platform=win32 --arch=x64 --overwrite --out=builds --ignore=\".doNotPackage$\" --asar",
+    "build-mac64": "electron-packager ./ --platform=darwin --arch=x64 --overwrite --out=builds --ignore=\".doNotPackage$\" --asar",
+    "build-win86": "electron-packager ./ --platform=win32 --arch=ia32 --overwrite --out=builds --ignore=\".doNotPackage$\" --asar"
+  },
+  "author": "",
+  "license": "See license.txt for license info",
+  "dependencies": {
+    "csv-writer": "^1.6.0",
+    "decimal.js": "^10.2.0",
+    "electron": "^8.0.1",
+    "electron-packager": "^14.2.1",
+    "electron-reload": "^1.5.0",
+    "moment": "^2.24.0",
+    "neat-csv": "^5.2.0",
+    "node-fetch": "^2.6.0"
+  }
+}
