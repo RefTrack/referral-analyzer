@@ -16,7 +16,7 @@
   "dependencies": {
     "csv-writer": "^1.6.0",
     "decimal.js": "^10.2.0",
-    "electron": "^8.0.1",
+    "electron": "^8.5.1",
     "electron-packager": "^14.2.1",
     "electron-reload": "^1.5.0",
     "moment": "^2.24.0",
