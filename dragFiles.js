@@ -1,6 +1,6 @@
 const ipc = require('electron').ipcRenderer;
 
-const VERSIONNUMBER = 1
+const VERSIONNUMBER = 2
 
 const electronShell = require('electron').shell
 

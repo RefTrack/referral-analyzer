@@ -110,7 +110,9 @@ function addMomentsAndDecimals(refEntry, index, dataArray) {
     }
 
 
-    refEntry.decimalAmount = Decimal(refEntry.delta)
+    // the .replace command strips out any commas from the string.  Binance puts them into numbers denominated in the thousands, but it makes the Decimal package unhappy.
+    refEntry.decimalAmount = Decimal(refEntry.delta.replace(/,/g, ''))
+
     dataArray[index] = refEntry
 
     progressBarUpdate(index, "index")
@@ -458,16 +460,32 @@ const filterRefArray = (refArray, filtersObj) => {
 
         if (filtersObj.includeOrExcludeSpecificReferals == "exclude") {
 
-            if (specificReferralsArray.includes(refEntry.email.replace(/\*/g, "").replace(/\s/g, ""))) {
-                entriesRemoved++
-                return false
+            if (refEntry.email) {
+                if (specificReferralsArray.includes(refEntry.email.replace(/\*/g, "").replace(/\s/g, ""))) {
+                    entriesRemoved++
+                    return false
+                }
+            } else if (refEntry.user_id) {
+                if (specificReferralsArray.includes(refEntry.user_id.replace(/\*/g, "").replace(/\s/g, ""))) {
+                    entriesRemoved++
+                    return false
+                }
             }
+
+            
             
         } else {
 
-            if (!specificReferralsArray.includes(refEntry.email.replace(/\*/g, "").replace(/\s/g, ""))) {
-                entriesRemoved++
-                return false
+            if (refEntry.email) {
+                if (!specificReferralsArray.includes(refEntry.email.replace(/\*/g, "").replace(/\s/g, ""))) {
+                    entriesRemoved++
+                    return false
+                }
+            } else if (refEntry.user_id) {
+                if (!specificReferralsArray.includes(refEntry.user_id.replace(/\*/g, "").replace(/\s/g, ""))) {
+                    entriesRemoved++
+                    return false
+                }
             }
             
         }
