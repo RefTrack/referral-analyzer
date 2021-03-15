@@ -5,6 +5,7 @@ const asyncForEach = require('./utils/asyncForEach')
 const Decimal = require('decimal.js')
 const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const fetch = require('node-fetch')
+var hashwords = require('hashwords')
 
 
 let totalRefEntries = 0
@@ -19,6 +20,12 @@ var sendProgressBarIpcMessage
 let lastDateWhenRefPricesWereChecked = ""
 let bnbbtcRefPrice = Decimal(0)
 let btcusdtRefPrice = Decimal(0)
+
+
+
+var calculateLeaderboard
+var leaderboardLength
+var leaderboardCurrency
 
 
 // const csvPath = "C:\\Users\\SDT11\\Downloads\\referral income records for 2019\\"
@@ -154,6 +161,14 @@ const alphabetizeByCurrency = (refEntryA, refEntryB) => {
     }
 }
 
+const orderByBuyAmount = (refEntryA, refEntryB) => {
+    if (refEntryA["Buy Amount"] > refEntryB["Buy Amount"]) {
+        return -1
+    } else {
+        return 1
+    }
+}
+
 const loadCsvToArray = async (path) => {
     const data = fs.readFileSync(path)
     const dataArray = await neatCsv(data)
@@ -248,14 +263,14 @@ const buildTripwireArray = (interval, arrayOfRefs) => {
 
 }
 
-const createOrAddToBalance = function(balanceObject, currency, amount) {
+const createOrAddToBalance = function(balanceObject, currencyOrUserID, amount) {
 
-    if (typeof balanceObject[currency] != "undefined") {
-        balanceObject[currency] = balanceObject[currency].add(amount)
+    if (typeof balanceObject[currencyOrUserID] != "undefined") {
+        balanceObject[currencyOrUserID] = balanceObject[currencyOrUserID].add(amount)
         // balanceObject[currency] = balanceObject[currency]+amount
 
     } else {
-        balanceObject[currency] = amount
+        balanceObject[currencyOrUserID] = amount
     }
 
     // if (currency == "BTC") {
@@ -272,23 +287,47 @@ const convertConsolidatedIntervalObjToArray = (consolidatedIntervalObject, momen
 
     for (var currency in consolidatedIntervalObject) {
         // console.log(`${currency}: ${consolidatedIntervalObject[currency].toString()}`)
-        const consolidatedRefEntry = {
-            "Type": "Income",
-            "Buy Amount": consolidatedIntervalObject[currency].toString(),
-            "Buy Currency": currency,
-            "Exchange": "Binance",
-            "Comment": `Binance referral income from ${previousTimestamp.format('YYYY-MM-DD')} to ${momentDate.subtract(1, 'milliseconds').format('YYYY-MM-DD')}, computed with Binance Referral Analyzer`,
-            "Date": momentDate.format('YYYY-MM-DD HH:mm:ss')
+        var consolidatedRefEntry
+
+
+        if (!calculateLeaderboard) {
+            consolidatedRefEntry = {
+                "Type": "Income",
+                "Buy Amount": consolidatedIntervalObject[currency].toString(),
+                "Buy Currency": currency,
+                "Exchange": "Binance",
+                "Comment": `Binance referral income from ${previousTimestamp.format('YYYY-MM-DD')} to ${momentDate.subtract(1, 'milliseconds').format('YYYY-MM-DD')}, computed with Binance Referral Analyzer`,
+                "Date": momentDate.format('YYYY-MM-DD HH:mm:ss')
+            }
+        } else {
+
+            var hw = hashwords()
+            const nickname = hw.hashStr(currency)
+
+            consolidatedRefEntry = {
+                "User ID": currency,
+                "Nickname": nickname,
+                "Buy Amount": consolidatedIntervalObject[currency].toString(),
+                "Comment": `Binance referral income from ${previousTimestamp.format('YYYY-MM-DD')} to ${momentDate.subtract(1, 'milliseconds').format('YYYY-MM-DD')}, computed with Binance Referral Analyzer`,
+                "Date": momentDate.format('YYYY-MM-DD HH:mm:ss')
+            }
         }
 
         currentConsolidatedIntervalArray.push(consolidatedRefEntry)
     }
 
-    const currentConsolidatedIntervalArrayAlphabetized = currentConsolidatedIntervalArray.sort(alphabetizeByCurrency)
-    currentConsolidatedIntervalArrayAlphabetized.push([])
-    console.log("Consolidated interval added")
+    if (!calculateLeaderboard) {
+        const currentConsolidatedIntervalArrayAlphabetized = currentConsolidatedIntervalArray.sort(alphabetizeByCurrency)
+        currentConsolidatedIntervalArrayAlphabetized.push([])
 
-    return currentConsolidatedIntervalArrayAlphabetized
+        console.log("Consolidated interval added")
+        return currentConsolidatedIntervalArrayAlphabetized
+    } else {
+        currentConsolidatedIntervalArray = currentConsolidatedIntervalArray.sort(orderByBuyAmount)
+        // currentConsolidatedIntervalArray.push({"Date": momentDate.format('YYYY-MM-DD HH:mm:ss')})
+        currentConsolidatedIntervalArray.push([])
+        return currentConsolidatedIntervalArray
+    }
 }
 
 const consolidateToInterval = (arrayOfRefs, interval, recordPrices) => {
@@ -311,6 +350,11 @@ const consolidateToInterval = (arrayOfRefs, interval, recordPrices) => {
             
             // console.log(`Current tripwire: ${currentTripwire.format()}`)
             console.log(`Interval complete (${currentTripwire.format()})`)
+
+            if (calculateLeaderboard) {
+                currentIntervalConsolidationsObj = sortAndTrimCurrentInterval(currentIntervalConsolidationsObj)
+            }
+
             // console.log(`Interval complete (${currentTripwire.format()}) with ${currentIntervalConsolidationsObj.length} currencies`)
             arrayOfConsolidations = arrayOfConsolidations.concat(convertConsolidatedIntervalObjToArray(currentIntervalConsolidationsObj, currentTripwire, previousTripwire))
             currentIntervalConsolidationsObj = {}
@@ -331,14 +375,37 @@ const consolidateToInterval = (arrayOfRefs, interval, recordPrices) => {
             // console.log(`Previous tripwire: ${previousTripwire.format()}`)
         }
 
-        const asset = ref.asset
+        var assetOrUserID
         const amount = ref.decimalAmount
 
-        createOrAddToBalance(currentIntervalConsolidationsObj, asset, amount)
+        if (!calculateLeaderboard) {
+            assetOrUserID = ref.asset
+        } else {
+
+            const refObjectKeys = Object.keys(ref)
+            const parentIDkey = refObjectKeys[0]
+
+            if (ref[parentIDkey]) {
+                assetOrUserID = ref[parentIDkey]
+            } else if (ref.user_id) {
+                assetOrUserID = ref.user_id
+                // console.log(`user ID: ${ref.user_id}`)
+                // console.log(`parent ID found: ${ref.parent_id}`)
+            } else {
+                assetOrUserID = "no parent_id or user_id found"
+            }
+        }
+
+        createOrAddToBalance(currentIntervalConsolidationsObj, assetOrUserID, amount)
+        
 
         progressBarUpdate(arrayOfRefs.length, "remaining")
 
 
+    }
+
+    if (calculateLeaderboard) {
+        currentIntervalConsolidationsObj = sortAndTrimCurrentInterval(currentIntervalConsolidationsObj)
     }
 
     arrayOfConsolidations = arrayOfConsolidations.concat(convertConsolidatedIntervalObjToArray(currentIntervalConsolidationsObj, currentTripwire, previousTripwire))
@@ -348,34 +415,84 @@ const consolidateToInterval = (arrayOfRefs, interval, recordPrices) => {
 
 }
 
+
+const sortAndTrimCurrentInterval = (objectToSortAndTrim) => {
+    
+    // from https://stackoverflow.com/questions/1069666/sorting-object-property-by-values
+    
+    var sortable = [];
+    for (var item in objectToSortAndTrim) {
+        sortable.push([item, objectToSortAndTrim[item]]);
+    }
+    
+    sortable.sort(function(a, b) {
+        return b[1] - a[1];
+    });
+
+    // Trim leaderboard according to spec
+    sortable = sortable.slice(0,leaderboardLength)
+
+    var objSortedAndTrimmed = {}
+    sortable.forEach(function(item){
+        objSortedAndTrimmed[item[0]]=item[1]
+    })
+
+    return objSortedAndTrimmed
+}
+
 const writeToCsvFile = async (path, consolidatedRefs, formatForCointrackingImport) => {
 
     let csvHeaders = []
 
     if (formatForCointrackingImport) {
-        csvHeaders = [
-            {id: "Type", title: "Type"}, 
-            {id: "Buy Amount", title: "Buy Amount"}, 
-            {id: "Buy Currency", title: "Buy Currency"}, 
-            {id: "Sell Amount", title: "Sell Amount"}, 
-            {id: "Sell Currency", title: "Sell Currency"}, 
-            {id: "Fee", title: "Fee"}, 
-            {id: "Fee Currency", title: "Fee Currency"}, 
-            {id: "Exchange", title: "Exchange"}, 
-            {id: "Trade-Group", title: "Trade-Group"}, 
-            {id: "Comment", title: "Comment"}, 
-            {id: "Date", title: "Date"}
-        ]
+        if (!calculateLeaderboard){
+            csvHeaders = [
+                {id: "Type", title: "Type"}, 
+                {id: "Buy Amount", title: "Buy Amount"}, 
+                {id: "Buy Currency", title: "Buy Currency"}, 
+                {id: "Sell Amount", title: "Sell Amount"}, 
+                {id: "Sell Currency", title: "Sell Currency"}, 
+                {id: "Fee", title: "Fee"}, 
+                {id: "Fee Currency", title: "Fee Currency"}, 
+                {id: "Exchange", title: "Exchange"}, 
+                {id: "Trade-Group", title: "Trade-Group"}, 
+                {id: "Comment", title: "Comment"}, 
+                {id: "Date", title: "Date"}
+            ]
+        } else {
+            csvHeaders = [
+                {id: "Date", title: "Date"},
+                {id: "User ID", title: "User ID"}, 
+                {id: "Nickname", title: "Nickname"}, 
+                {id: "Buy Amount", title: "Buy Amount"}, 
+                {id: "Comment", title: "Comment"}
+            ]
+            
+        }
     } else {
-        csvHeaders = [
-            {id: "Date", title: "Date"},
-            {id: "Buy Currency", title: "Buy Currency"}, 
-            {id: "Buy Amount", title: "Buy Amount"}, 
-            {id: "Contemporary BTC Value", title: "Contemporary BTC Value"},
-            {id: "Contemporary BNB Value", title: "Contemporary BNB Value"},
-            {id: "Contemporary USDT Value", title: "Contemporary USDT Value"},
-            {id: "Comment", title: "Comment"}, 
-        ]
+        if (!calculateLeaderboard) {
+            csvHeaders = [
+                {id: "Date", title: "Date"},
+                {id: "Buy Currency", title: "Buy Currency"}, 
+                {id: "Buy Amount", title: "Buy Amount"}, 
+                {id: "Contemporary BTC Value", title: "Contemporary BTC Value"},
+                {id: "Contemporary BNB Value", title: "Contemporary BNB Value"},
+                {id: "Contemporary USDT Value", title: "Contemporary USDT Value"},
+                {id: "Comment", title: "Comment"}, 
+            ]
+        } else {
+            csvHeaders = [
+                {id: "Date", title: "Date"},
+                {id: "User ID", title: "User ID"}, 
+                {id: "Nickname", title: "Nickname"}, 
+                {id: "Buy Amount", title: "Buy Amount"}, 
+                {id: "Contemporary BTC Value", title: "Contemporary BTC Value"},
+                {id: "Contemporary BNB Value", title: "Contemporary BNB Value"},
+                {id: "Contemporary USDT Value", title: "Contemporary USDT Value"},
+                {id: "Comment", title: "Comment"}, 
+            ]
+
+        }
     }
 
     // if (includesPrices) {
@@ -670,9 +787,9 @@ async function addPriceToArray (arrayEntry, index, dataArray) {
     // get ETH/BTC price for this date, unless we have it already
     // get BTC price for this asset for this date
 
-    if (typeof arrayEntry["Buy Currency"] != 'undefined') {
+    if (typeof arrayEntry["Buy Currency"] != 'undefined' || typeof arrayEntry["User ID"] != 'undefined') {
 
-        const currency = arrayEntry["Buy Currency"]
+        const currency = leaderboardCurrency || arrayEntry["Buy Currency"]
         const date = arrayEntry["Date"]
         const amount = arrayEntry["Buy Amount"]
 
@@ -710,25 +827,46 @@ async function addPriceToArray (arrayEntry, index, dataArray) {
 
 
 
+const reduceLeaderboard = (consolidatedRefs) => {
+
+}
+
+
+
+
 const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, filtersObj, formatForCointrackingImport, sendProgressBarPercent) => {
+
+
 
     try {
 
         // const errorProducer = undefined
         // console.log(errorProducer[1])
 
+        calculateLeaderboard = filtersObj.calculateLeaderboard
+        leaderboardLength = filtersObj.leaderboardLength || 100000
+        leaderboardCurrency = filtersObj.leaderboardCurrency.toUpperCase()
+
         sendProgressBarIpcMessage = sendProgressBarPercent
         priceDeterminationErrors = 0
         failedPricePairs = ""
         priceErrorsSuccessfullyResolvedInFuture = 0
         jumpedForwardPricePairs = ""
+
+
+        let modifiedFiltersObj = filtersObj
+
+        if (calculateLeaderboard) {
+            modifiedFiltersObj.specificCurrencies = leaderboardCurrency
+            modifiedFiltersObj.includeOrExcludeSpecificCurrencies = "include"
+        }
         
         
         sendStatus("Beginning analysis...")
         console.log("Paths: ", arrayOfPaths)
         console.log("Interval (days): ", interval)
         sendStatus(`Output path: ${outputPath}`)
-        console.log("Filters: ", filtersObj)
+        console.log("Filters: ", modifiedFiltersObj)
 
         sendStatus('Loading CSVs...')
         timer.mark()
@@ -745,7 +883,7 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
         }
 
         let timestampsNotAddedYet = true
-        if (filtersObj.startDate != "" || filtersObj.endDate != "") {
+        if (modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
 
             console.log('Adding Moment timestamps and Decimals...')
             sendStatus("Parsing dates and amounts...")
@@ -758,10 +896,10 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
         }
 
 
-        if (filtersObj.specificCurrencies.length > 0 || filtersObj.specificReferals.length > 0  || filtersObj.startDate != "" || filtersObj.endDate != "") {
+        if (modifiedFiltersObj.specificCurrencies.length > 0 || modifiedFiltersObj.specificReferals.length > 0  || modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
             sendStatus('Applying filter(s)...')
             timer.mark()
-            allRefEntries = filterRefArray(allRefEntries, filtersObj)
+            allRefEntries = filterRefArray(allRefEntries, modifiedFiltersObj)
             sendStatus(`Filtered in ${timer.read()} seconds`)
             sendStatus(`${allRefEntries.length} income entries remaining after filtering. (${(allRefEntries.length/totalRefEntries*100).toFixed(4)}% of original)`)
             // sendStatus(`${Math.round((allRefEntries.length/totalRefEntries).toFixed(4))}% of income entries remaining after filtering`)
@@ -800,6 +938,9 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
         // console.log(consolidatedRefs)
 
 
+        if (calculateLeaderboard) {
+
+        }
         
 
         if (!formatForCointrackingImport) {

@@ -135,6 +135,8 @@ goBtn.addEventListener('click', function () {
     const startDate = document.getElementById('start-date').value
     const endDate = document.getElementById('end-date').value
     const formatForCointrackingImport = document.getElementById('do-import-radio').checked
+    const leaderboardLength = document.getElementById('leaderboard-max-users').value
+    const leaderboardCurrency = document.getElementById('leaderboard-currency').value
     
 
 
@@ -142,7 +144,18 @@ goBtn.addEventListener('click', function () {
         specificReferals,
         specificCurrencies,
         startDate,
-        endDate
+        endDate,
+        leaderboardLength,
+        leaderboardCurrency
+    }
+
+    if(document.getElementById('yes-leaderboard-radio').checked) {
+        filtersObj.calculateLeaderboard = true
+
+    } else {
+        filtersObj.calculateLeaderboard = false
+        // filtersObj.leaderboardLength = undefined
+        // filtersObj.leaderboardCurrency = undefined
     }
 
     if(document.getElementById('include-radio').checked) {
