@@ -132,6 +132,7 @@ goBtn.addEventListener('click', function () {
     const interval = document.getElementById('interval-input').value
     const specificReferals = document.getElementById('specific-referrals-textarea').value
     const specificCurrencies = document.getElementById('specific-coins-textarea').value
+    const specificCodes = document.getElementById('specific-codes-textarea').value
     const startDate = document.getElementById('start-date').value
     const endDate = document.getElementById('end-date').value
     const formatForCointrackingImport = document.getElementById('do-import-radio').checked
@@ -146,7 +147,8 @@ goBtn.addEventListener('click', function () {
         startDate,
         endDate,
         leaderboardLength,
-        leaderboardCurrency
+        leaderboardCurrency,
+        specificCodes
     }
 
     if(document.getElementById('yes-leaderboard-radio').checked) {
@@ -168,6 +170,12 @@ goBtn.addEventListener('click', function () {
         filtersObj.includeOrExcludeSpecificCurrencies = "include"
     } else {
         filtersObj.includeOrExcludeSpecificCurrencies = "exclude"
+    }
+
+    if(document.getElementById('codes-include-radio').checked) {
+        filtersObj.includeOrExcludeSpecificCodes = "include"
+    } else {
+        filtersObj.includeOrExcludeSpecificCodes = "exclude"
     }
 
 

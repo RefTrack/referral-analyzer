@@ -540,6 +540,10 @@ const filterRefArray = (refArray, filtersObj) => {
     const specificReferralsArray = filtersObj.specificReferals.replace(/\*/g, "").replace(/\s/g, "").toLowerCase().split(",")
     console.log("filtering emails: ", specificReferralsArray)
 
+    // Remove all spaces and split into an array
+    const specificCodesArray = filtersObj.specificCodes.replace(/\s/g, "").toUpperCase().split(',')
+    console.log("filtering codes: ", specificCodesArray)
+
     console.log("BNB is filtered: ", specificCurrenciesArray.includes("BNB"))
 
     const filteredArray = refArray.filter( (refEntry, index, originalArray) => {
@@ -567,6 +571,22 @@ const filterRefArray = (refArray, filtersObj) => {
         } else {
 
             if (!specificCurrenciesArray.includes(refEntry.asset)) {
+                entriesRemoved++
+                return false
+            }
+
+        }
+
+        if (filtersObj.includeOrExcludeSpecificCodes == "exclude") {
+
+            if (specificCodesArray.includes(refEntry.referral_code)) {
+                entriesRemoved++
+                return false
+            }
+            
+        } else {
+
+            if (!specificCodesArray.includes(refEntry.referral_code)) {
                 entriesRemoved++
                 return false
             }
@@ -896,7 +916,7 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
         }
 
 
-        if (modifiedFiltersObj.specificCurrencies.length > 0 || modifiedFiltersObj.specificReferals.length > 0  || modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
+        if (modifiedFiltersObj.specificCodes.length > 0 || modifiedFiltersObj.specificCurrencies.length > 0 || modifiedFiltersObj.specificReferals.length > 0  || modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
             sendStatus('Applying filter(s)...')
             timer.mark()
             allRefEntries = filterRefArray(allRefEntries, modifiedFiltersObj)
