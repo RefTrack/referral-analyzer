@@ -27,6 +27,9 @@ var calculateLeaderboard
 var leaderboardLength
 var leaderboardCurrency
 
+const maxRefEntriesToProcessAtOnce = 1000000
+// const maxRefEntriesToProcessAtOnce = 50
+
 
 // const csvPath = "C:\\Users\\SDT11\\Downloads\\referral income records for 2019\\"
 
@@ -902,60 +905,123 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
             return
         }
 
-        let timestampsNotAddedYet = true
-        if (modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
 
-            console.log('Adding Moment timestamps and Decimals...')
-            sendStatus("Parsing dates and amounts...")
-            timer.mark()
-            allRefEntries.forEach(addMomentsAndDecimals)
-            console.log(`Timestamps/Decimals added in ${timer.read()} seconds`)
-            sendStatus(`Dates/amounts parsed in ${timer.read()} seconds`)
-            timestampsNotAddedYet = false
+        let semiConsolidatedRefs = []
+        let fullyConsolidatedRefs = []
+        let consolidationRounds = 0
+        let consolidationsNeeded = Math.ceil(allRefEntries.length/maxRefEntriesToProcessAtOnce)
+        let nowSuperconsolidating = false
 
-        }
+        while (allRefEntries.length > 0) {
 
+            consolidationRounds++
 
-        if (modifiedFiltersObj.specificCodes.length > 0 || modifiedFiltersObj.specificCurrencies.length > 0 || modifiedFiltersObj.specificReferals.length > 0  || modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
-            sendStatus('Applying filter(s)...')
-            timer.mark()
-            allRefEntries = filterRefArray(allRefEntries, modifiedFiltersObj)
-            sendStatus(`Filtered in ${timer.read()} seconds`)
-            sendStatus(`${allRefEntries.length} income entries remaining after filtering. (${(allRefEntries.length/totalRefEntries*100).toFixed(4)}% of original)`)
-            // sendStatus(`${Math.round((allRefEntries.length/totalRefEntries).toFixed(4))}% of income entries remaining after filtering`)
+            if (consolidationsNeeded > 1) {
 
-            if (allRefEntries.length == 0) {
-                sendStatus('No income left after filtering!  Ending here.  Try specifying looser filters.')
-                return
+                if (consolidationRounds == 1) {
+                    sendStatus(`Wow, that's a lot of data! If we try to process more than ${maxRefEntriesToProcessAtOnce} at once, the tool will sometimes crash.  So we'll divide this import into ${consolidationsNeeded} parts, consolidate each, and then perform a super-consolidation.`)
+                }
+
+                sendStatus(`Now in consolidation ${consolidationRounds} of ${consolidationsNeeded}`)
             }
 
-            totalRefEntries = allRefEntries.length
-        }
-        // console.log(`Final 2 ref entries:`)
+            let refsForThisRound = allRefEntries.splice(0,maxRefEntriesToProcessAtOnce)
+            totalRefEntries = refsForThisRound.length
 
-        if (timestampsNotAddedYet) {
+            console.log(refsForThisRound.length)
+            console.log(refsForThisRound[0])
+            console.log(refsForThisRound[refsForThisRound.length-1])
 
-            console.log('Adding Moment timestamps and Decimals...')
-            sendStatus("Parsing dates and amounts...")
+            let timestampsNotAddedYet = true
+            if (modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
+
+                console.log('Adding Moment timestamps and Decimals...')
+                sendStatus("Parsing dates and amounts...")
+                timer.mark()
+                refsForThisRound.forEach(addMomentsAndDecimals)
+                console.log(`Timestamps/Decimals added in ${timer.read()} seconds`)
+                sendStatus(`Dates/amounts parsed in ${timer.read()} seconds`)
+                timestampsNotAddedYet = false
+
+            }
+
+
+            if (modifiedFiltersObj.specificCodes.length > 0 || modifiedFiltersObj.specificCurrencies.length > 0 || modifiedFiltersObj.specificReferals.length > 0  || modifiedFiltersObj.startDate != "" || modifiedFiltersObj.endDate != "") {
+                
+                if (!nowSuperconsolidating) {
+                    sendStatus('Applying filter(s)...')
+                    timer.mark()
+                    refsForThisRound = filterRefArray(refsForThisRound, modifiedFiltersObj)
+                    sendStatus(`Filtered in ${timer.read()} seconds`)
+                    sendStatus(`${refsForThisRound.length} income entries remaining after filtering. (${(refsForThisRound.length/totalRefEntries*100).toFixed(4)}% of original)`)
+                    // sendStatus(`${Math.round((refsForThisRound.length/totalRefEntries).toFixed(4))}% of income entries remaining after filtering`)
+    
+                    totalRefEntries = refsForThisRound.length
+                }
+            }
+            // console.log(`Final 2 ref entries:`)
+
+            if (timestampsNotAddedYet) {
+
+                console.log('Adding Moment timestamps and Decimals...')
+                sendStatus("Parsing dates and amounts...")
+                timer.mark()
+                refsForThisRound.forEach(addMomentsAndDecimals)
+                console.log(`Timestamps/Decimals added in ${timer.read()} seconds`)
+                sendStatus(`Dates/amounts parsed in ${timer.read()} seconds`)
+
+            }
+
+            sendStatus('Sorting by date...')
             timer.mark()
-            allRefEntries.forEach(addMomentsAndDecimals)
-            console.log(`Timestamps/Decimals added in ${timer.read()} seconds`)
-            sendStatus(`Dates/amounts parsed in ${timer.read()} seconds`)
+            refsForThisRound.sort(compareDateByMomentTimestamp)
+            sendStatus(`Sorted in ${timer.read()} seconds`)
+            console.log("Final referral income entry:")
+            consoleLogRefEntry(refsForThisRound[refsForThisRound.length - 1])
 
+            sendStatus("Consolidating to intervals...")
+            timer.mark()
+            const consolidatedRefsForThisRound = consolidateToInterval(refsForThisRound, interval)
+            sendStatus(`Consolidated in ${timer.read()} seconds`)
+            // console.log(consolidatedRefs)
+
+            semiConsolidatedRefs = semiConsolidatedRefs.concat(consolidatedRefsForThisRound)
+
+            if (allRefEntries.length == 0 && consolidationRounds > 1) {
+
+                sendStatus(`Entering super-consolidation with ${semiConsolidatedRefs.length} entries to super-consolidate.`)
+
+                semiConsolidatedRefs.forEach( element => {
+                    // This if-statement checks to make sure this isn't a 'whitespace' line in the export between two dates.
+                    if (element["Buy Amount"]) {
+                        const simplifiedEntry = {
+                            user_id: 0,
+                            time: element["Date"],
+                            delta: element["Buy Amount"],
+                            asset: element["Buy Currency"]
+                        }
+                        allRefEntries.push(simplifiedEntry)
+                    }
+                })
+
+                semiConsolidatedRefs = []
+
+                consolidationsNeeded = Math.ceil(allRefEntries.length/maxRefEntriesToProcessAtOnce)
+                consolidationRounds = 0
+                nowSuperconsolidating = true
+
+            }
+            
         }
 
-        sendStatus('Sorting by date...')
-        timer.mark()
-        allRefEntries.sort(compareDateByMomentTimestamp)
-        sendStatus(`Sorted in ${timer.read()} seconds`)
-        console.log("Final referral income entry:")
-        consoleLogRefEntry(allRefEntries[allRefEntries.length - 1])
+        fullyConsolidatedRefs = semiConsolidatedRefs
 
-        sendStatus("Consolidating to intervals...")
-        timer.mark()
-        const consolidatedRefs = consolidateToInterval(allRefEntries, interval)
-        sendStatus(`Consolidated in ${timer.read()} seconds`)
-        // console.log(consolidatedRefs)
+        totalRefEntries = fullyConsolidatedRefs.length
+
+        if (fullyConsolidatedRefs.length == 0) {
+            sendStatus('No income left after filtering!  Ending here.  Try specifying looser filters.')
+            return
+        }
 
 
         if (calculateLeaderboard) {
@@ -964,23 +1030,23 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
         
 
         if (!formatForCointrackingImport) {
-            totalRefEntries = consolidatedRefs.length
+            totalRefEntries = fullyConsolidatedRefs.length
             sendStatus("Retrieving/adding price data...")
             timer.mark()
-            await asyncForEach(consolidatedRefs, addPriceToArray)
+            await asyncForEach(fullyConsolidatedRefs, addPriceToArray)
             sendStatus(`Prices added in ${timer.read()} seconds`)
 
 
             let message = `There were ${priceErrorsSuccessfullyResolvedInFuture} times that the tool couldn't determine a price on the requested date, but for which the tool found a price at some point in the future.`
             sendStatus(message)
-            consolidatedRefs.push({"Comment": message})
+            fullyConsolidatedRefs.push({"Comment": message})
 
             if (priceErrorsSuccessfullyResolvedInFuture != 0) {
                 // sendStatus(`WARNING: That might reduce accuracy.`)
                 
                 message = `These are the pairs that had to be priced in the future: ${jumpedForwardPricePairs}`
                 // sendStatus(message)
-                consolidatedRefs.push({"Comment": message})
+                fullyConsolidatedRefs.push({"Comment": message})
             }
 
             sendStatus(`There were ${priceDeterminationErrors} price determination failures.`)
@@ -989,14 +1055,14 @@ const analyzeIncome = async (sendStatus, arrayOfPaths, interval, outputPath, fil
                 // sendStatus(`That should have been zero - each time there was an error, the tool considered the value for your referrals in a given consolidation period for a given currency to be zero.`)
                 message = `These are the pairs that failed to resolve, and were valued at zero.  Perhaps Binance delisted them?: ${failedPricePairs}`
                 // sendStatus(message)
-                consolidatedRefs.push({"Comment": message})
+                fullyConsolidatedRefs.push({"Comment": message})
             }
             // console.log(consolidatedRefs)
         }
 
         sendStatus('Writing to CSV output file...')
         timer.mark()
-        await writeToCsvFile(outputPath, consolidatedRefs, formatForCointrackingImport)
+        await writeToCsvFile(outputPath, fullyConsolidatedRefs, formatForCointrackingImport)
         sendStatus(`CSV written in ${timer.read()} seconds`)
         sendStatus(`Done.`)
 
